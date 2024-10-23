@@ -6,6 +6,7 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
+use model::ModelController;
 use serde::Deserialize;
 use tower_http::services::ServeDir;
 
@@ -14,8 +15,10 @@ mod model;
 mod web;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     // tracing_subscriber::fmt::init();
+    // Initialize ModelController
+    let mc = ModelController::new().await?;
 
     fn routes_static() -> Router {
         return Router::new().nest_service("/", get_service(ServeDir::new("./")));
@@ -30,18 +33,15 @@ async fn main() {
     let routes_all = Router::new()
         .merge(routes_hello())
         .merge(web::routes_login::routes())
+        .nest("/api", web::routes_tickets::routes(mc.clone()))
         .fallback_service(routes_static());
 
-    let listener = match tokio::net::TcpListener::bind("0.0.0.0:3000").await {
-        Ok(listener) => listener,
-        Err(e) => {
-            eprintln!("Failed to bind address: {}", e);
-            return;
-        }
-    };
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
     println!("->> LISTENING on 0.0.0.0:3000\n");
     axum::serve(listener, routes_all).await.unwrap();
+
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
